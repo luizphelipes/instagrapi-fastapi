@@ -4,6 +4,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENV PYTHONHASHSEED=random
 
 # Instala dependências do sistema
 RUN apt-get update \
@@ -12,6 +13,7 @@ RUN apt-get update \
         g++ \
         libpq-dev \
         curl \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Define o diretório de trabalho
@@ -20,7 +22,7 @@ WORKDIR /app
 # Copia os arquivos de dependências
 COPY requirements.txt .
 
-# Instala as dependências Python
+# Instala as dependências Python com otimizações
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
@@ -38,5 +40,5 @@ EXPOSE 8000
 # Torna o script executável
 RUN chmod +x /app/start.sh
 
-# Comando para executar a aplicação
+# Comando para executar a aplicação com otimizações
 CMD ["/app/start.sh"] 

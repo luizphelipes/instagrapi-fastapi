@@ -391,7 +391,7 @@ class AccountManager:
 class InstagramService:
     """
     Serviço para interagir com o Instagram, com cache Redis, rotação de contas e sistema de pré-aquecimento.
-    Versão async para FastAPI.
+    Versão async para FastAPI com otimizações para reduzir cold start.
     """
 
     def __init__(self):
@@ -401,6 +401,109 @@ class InstagramService:
         self._account_ids: List[str] = []
         self._account_index = 0
         self.account_manager = AccountManager(self) # Passa a instância do serviço
+        self._initialized = False
+        self._init_task = None
+
+    async def initialize(self, db: AsyncSession = None):
+        """Inicializa o serviço de forma assíncrona"""
+        if self._initialized:
+            return
+            
+        logger.info("🚀 Inicializando InstagramService...")
+        start_time = time.time()
+        
+        # Carrega contas do .env
+        await self._load_from_env()
+        
+        # Carrega contas do banco se disponível
+        if db:
+            await self._load_session_ids(db)
+        
+        # Pré-inicializa pelo menos um cliente
+        if self._account_ids:
+            try:
+                account_id = self._account_ids[0]
+                await self._initialize_client(account_id)
+                logger.info(f"✅ Cliente pré-inicializado para {account_id}")
+            except Exception as e:
+                logger.error(f"❌ Erro na pré-inicialização: {e}")
+        
+        # Inicia sistema de pré-aquecimento
+        if self._account_ids:
+            await self.account_manager.start_warmup_system()
+        
+        self._initialized = True
+        logger.info(f"✅ InstagramService inicializado em {time.time() - start_time:.2f}s")
+
+    async def ensure_initialized(self):
+        """Garante que o serviço está inicializado"""
+        if not self._initialized:
+            await self.initialize()
+
+    async def _pre_initialize(self):
+        """Pré-inicializa os clientes para reduzir cold start"""
+        if self._initialized:
+            return
+            
+        logger.info("🚀 Iniciando pré-inicialização dos clientes Instagram...")
+        start_time = time.time()
+        
+        # Carrega contas do .env primeiro
+        await self._load_from_env()
+        
+        # Pré-inicializa pelo menos um cliente
+        if self._account_ids:
+            try:
+                account_id = self._account_ids[0]
+                await self._initialize_client(account_id)
+                logger.info(f"✅ Cliente pré-inicializado para {account_id} em {time.time() - start_time:.2f}s")
+            except Exception as e:
+                logger.error(f"❌ Erro na pré-inicialização: {e}")
+        
+        self._initialized = True
+
+    async def _load_from_env(self):
+        """Carrega contas do arquivo .env"""
+        for key, value in os.environ.items():
+            if key.startswith('INSTAGRAM_SESSION_ID_') and value:
+                account_id = key.replace('INSTAGRAM_SESSION_ID_', '')
+                if account_id not in self._session_ids:
+                    self._session_ids[account_id] = value
+                    self.account_manager.accounts_status[account_id] = {
+                        "username": account_id,
+                        "last_synced": datetime.utcnow().isoformat(),
+                        "status": "loaded",
+                        "last_warmup": None,
+                        "last_activity": None
+                    }
+                    logger.info(f"Conta {account_id} carregada do .env.")
+        
+        self._account_ids = list(self._session_ids.keys())
+
+    async def _initialize_client(self, account_id: str) -> Optional[Client]:
+        """Inicializa um cliente específico"""
+        session_id = self._session_ids.get(account_id)
+        if not session_id:
+            logger.error(f"Session ID não encontrado para a conta {account_id}")
+            return None
+        
+        try:
+            client = Client(request_timeout=10)  # Reduzido de 15 para 10
+            device = random.choice(IPHONE_DEVICES)
+            client.set_device(device)
+            client.set_user_agent(device["user_agent"])
+            client.login_by_sessionid(session_id)
+            self._clients[account_id] = client
+            logger.info(f"Cliente Instagrapi criado para a conta {account_id}")
+            return client
+        except Exception as e:
+            logger.error(f"Erro ao inicializar cliente para conta {account_id}: {e}")
+            # Remove conta inválida
+            if account_id in self._session_ids:
+                del self._session_ids[account_id]
+            if account_id in self._account_ids:
+                self._account_ids.remove(account_id)
+            return None
 
     async def _load_session_ids(self, db: AsyncSession):
         """Carrega os session IDs das contas do banco de dados e do arquivo .env."""
@@ -492,7 +595,7 @@ class InstagramService:
 
     def _get_client(self) -> Optional[Client]:
         """
-        Obtém ou cria um cliente Instagrapi para a próxima conta disponível (Lazy Loading).
+        Obtém ou cria um cliente Instagrapi para a próxima conta disponível (Lazy Loading otimizado).
         """
         # Se não há contas carregadas, tenta carregar do .env primeiro
         if not self._account_ids:
@@ -533,7 +636,7 @@ class InstagramService:
             return None
         
         try:
-            client = Client(request_timeout=15)
+            client = Client(request_timeout=10)  # Reduzido de 15 para 10
             device = random.choice(IPHONE_DEVICES)
             client.set_device(device)
             client.set_user_agent(device["user_agent"])
@@ -573,6 +676,9 @@ class InstagramService:
     @redis_cache(ttl=300)  # Cache de 5 minutos
     async def get_user_stories(self, username: str, db: AsyncSession = None) -> dict:
         """Obtém os stories de um usuário."""
+        # Garante que o serviço está inicializado
+        await self.ensure_initialized()
+        
         # Se não há contas carregadas e temos acesso ao banco, tenta carregar
         if not self._account_ids and db:
             await self._update_accounts_from_db(db)
@@ -614,6 +720,9 @@ class InstagramService:
 
     @redis_cache(ttl=120)  # Cache de 2 minutos
     async def get_profile_privacy(self, username: str, db: AsyncSession = None) -> dict:
+        # Garante que o serviço está inicializado
+        await self.ensure_initialized()
+        
         # Se não há contas carregadas e temos acesso ao banco, tenta carregar
         if not self._account_ids and db:
             await self._update_accounts_from_db(db)
