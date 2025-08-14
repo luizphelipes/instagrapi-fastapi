@@ -1,5 +1,6 @@
 import os
 import base64
+import sys
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, DateTime, LargeBinary
@@ -9,11 +10,28 @@ from cryptography.fernet import Fernet
 
 load_dotenv()
 
+# Remove psycopg2 do sys.modules se existir para evitar conflitos
+if 'psycopg2' in sys.modules:
+    del sys.modules['psycopg2']
+if 'psycopg2.binary' in sys.modules:
+    del sys.modules['psycopg2.binary']
+
 # Configuração do banco de dados
 DATABASE_URL = os.getenv(
     'DATABASE_URL', 
     'postgresql+asyncpg://user:password@localhost:5432/instagram_api'
 )
+
+# Força o uso do asyncpg removendo qualquer referência ao psycopg2
+if 'psycopg2' in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace('postgresql+psycopg2://', 'postgresql+asyncpg://')
+    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
+
+# Garante que a URL use asyncpg
+if not DATABASE_URL.startswith('postgresql+asyncpg://'):
+    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
+
+print(f"🔗 Usando URL do banco: {DATABASE_URL}")
 
 def generate_fernet_key():
     """Gera uma chave Fernet válida"""
@@ -64,21 +82,36 @@ def decrypt_session_id(encrypted_session_id: bytes) -> str:
     """Descriptografa o session_id."""
     return fernet.decrypt(encrypted_session_id).decode()
 
-# Cria engine async
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,  # Set to True para debug SQL
-    pool_pre_ping=True,
-    pool_recycle=300,
-    # Força o uso do driver asyncpg
-    future=True,
-    # Especifica explicitamente o driver
-    connect_args={
-        "server_settings": {
-            "application_name": "instagram_api"
+# Cria engine async forçando o uso do asyncpg
+try:
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,  # Set to True para debug SQL
+        pool_pre_ping=True,
+        pool_recycle=300,
+        # Força o uso do driver asyncpg
+        future=True,
+        # Especifica explicitamente o driver
+        connect_args={
+            "server_settings": {
+                "application_name": "instagram_api"
+            }
         }
-    }
-)
+    )
+    print("✅ Engine SQLAlchemy criado com sucesso usando asyncpg")
+except Exception as e:
+    print(f"❌ Erro ao criar engine: {e}")
+    print("🔧 Tentando configuração alternativa...")
+    
+    # Configuração alternativa
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        future=True
+    )
+    print("✅ Engine SQLAlchemy criado com configuração alternativa")
 
 # Cria sessão async
 AsyncSessionLocal = async_sessionmaker(

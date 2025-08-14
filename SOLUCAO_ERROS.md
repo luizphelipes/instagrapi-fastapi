@@ -9,7 +9,8 @@ ValueError: Fernet key must be 32 url-safe base64-encoded bytes.
 
 ### 2. Erro de Driver PostgreSQL
 ```
-sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driver to be used. The loaded 'psycopg2' is not async.
+ModuleNotFoundError: No module named 'psycopg2'
+sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driver to be used.
 ```
 
 ## ✅ Soluções Implementadas
@@ -20,10 +21,12 @@ sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driv
 - ✅ Tratamento de erro robusto
 
 ### 📦 Driver PostgreSQL (RESOLVIDO)
-- ✅ Removido `psycopg2-binary` do requirements.txt
-- ✅ Mantido apenas `asyncpg` para conexões assíncronas
-- ✅ Configuração correta do engine SQLAlchemy
-- ✅ Forçado uso do driver async com `future=True`
+- ✅ **Removido `psycopg2-binary`** do requirements.txt
+- ✅ **Mantido apenas `asyncpg`** para conexões assíncronas
+- ✅ **Configuração robusta** do engine SQLAlchemy
+- ✅ **Remoção forçada** de psycopg2 do sys.modules
+- ✅ **Validação da URL** para garantir uso do asyncpg
+- ✅ **Tratamento de erro** com configuração alternativa
 
 ## 🚀 Como Aplicar as Correções
 
@@ -83,16 +86,31 @@ Após a reconstrução, você deve ver:
 ## 📋 Logs Esperados
 
 ```
+🔗 Usando URL do banco: postgresql+asyncpg://user:password@postgres:5432/instagram_api
+✅ Engine SQLAlchemy criado com sucesso usando asyncpg
 INFO:     Uvicorn running on http://0.0.0.0:8000
 🔑 Nova chave gerada: [chave_gerada]
 💡 Adicione esta chave ao seu arquivo .env como ENCRYPTION_KEY=
 INFO:     Application startup complete
 ```
 
-## 🧪 Teste de Conexão
+## 🧪 Testes de Verificação
 
-Para testar se a conexão com o banco está funcionando:
+### Teste de Dependências
+```bash
+# Execute o script de verificação
+python check_dependencies.py
+```
 
+Você deve ver:
+```
+✅ asyncpg - Versão: [versão]
+✅ psycopg2 - NÃO INSTALADO (correto)
+✅ SQLAlchemy async - OK
+🎉 Todas as dependências estão corretas!
+```
+
+### Teste de Conexão
 ```bash
 # Execute o script de teste
 python test_db_connection.py
@@ -130,14 +148,21 @@ Você deve ver:
 
 ### Database.py
 ```python
+# Remove psycopg2 do sys.modules se existir para evitar conflitos
+if 'psycopg2' in sys.modules:
+    del sys.modules['psycopg2']
+
+# Força o uso do asyncpg
+if not DATABASE_URL.startswith('postgresql+asyncpg://'):
+    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
+
+# Cria engine async forçando o uso do asyncpg
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
     pool_recycle=300,
-    # Força o uso do driver asyncpg
     future=True,
-    # Especifica explicitamente o driver
     connect_args={
         "server_settings": {
             "application_name": "instagram_api"
@@ -152,7 +177,8 @@ engine = create_async_engine(
 2. **Verifique se as portas 8000, 5432, 6379 estão livres**
 3. **Verifique se o arquivo `.env` existe e está configurado**
 4. **Execute `docker system prune -a` para limpar cache**
-5. **Teste a conexão com: `python test_db_connection.py`**
+5. **Teste as dependências: `python check_dependencies.py`**
+6. **Teste a conexão: `python test_db_connection.py`**
 
 ## 📞 Suporte
 
@@ -160,4 +186,5 @@ Se os problemas persistirem, verifique:
 - Logs completos: `docker-compose logs api`
 - Status dos containers: `docker-compose ps`
 - Configuração do `.env`
-- Teste de conexão: `python test_db_connection.py` 
+- Dependências: `python check_dependencies.py`
+- Conexão: `python test_db_connection.py` 
