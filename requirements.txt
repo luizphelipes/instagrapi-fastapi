@@ -1,0 +1,12 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+redis==5.0.1
+instagrapi==2.1.1
+python-dotenv==1.0.0
+cryptography==41.0.5
+pydantic>=2.0.0
+Pillow>=8.1.1
+python-multipart==0.0.6
+httpx==0.25.2 

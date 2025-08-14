@@ -1,0 +1,68 @@
+services:
+  # Serviço da API do Instagram (FastAPI)
+  api:
+    build: .
+    container_name: fastapi-instagram-api
+    ports:
+      - "8000:8000" # Mapeia a porta 8000 do seu PC para a 8000 do contêiner
+    volumes:
+      - .:/app # Monta o diretório atual para hot-reloading do código
+    env_file:
+      - .env # Carrega as variáveis de ambiente do arquivo .env
+    environment:
+      - REDIS_HOST=redis # Garante que a API se conecte ao serviço redis
+      - REDIS_PORT=6379
+      - DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/instagram_api # Conexão com o PostgreSQL
+      - DATABASE_HOST=postgres # Host do banco de dados para o entrypoint
+      - DATABASE_PORT=5432 # Porta do banco de dados para o entrypoint
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY} # Passa a chave de criptografia
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - instagram-net
+    restart: unless-stopped
+
+  # Serviço do Redis para cache
+  redis:
+    image: "redis:7-alpine"
+    container_name: redis-cache-fastapi
+    networks:
+      - instagram-net
+    volumes:
+      - redis-data:/data # Persiste os dados do cache
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # Serviço do PostgreSQL para armazenamento de contas
+  postgres:
+    image: "postgres:15-alpine"
+    container_name: postgres-db-fastapi
+    environment:
+      POSTGRES_DB: instagram_api
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # Persiste os dados do banco de dados
+    networks:
+      - instagram-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d instagram_api"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# Define a rede para os serviços se comunicarem
+networks:
+  instagram-net:
+    driver: bridge
+
+# Define os volumes para persistir os dados
+volumes:
+  redis-data:
+  postgres-data: 
