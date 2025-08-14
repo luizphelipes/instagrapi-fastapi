@@ -7,6 +7,7 @@ Execute este script para verificar se a configuração está correta.
 import asyncio
 import os
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,7 +65,7 @@ async def test_database_connection():
         
         # Testa a conexão
         async with engine.begin() as conn:
-            result = await conn.execute("SELECT version()")
+            result = await conn.execute(text("SELECT version()"))
             version = result.scalar()
             print(f"✅ Conexão bem-sucedida!")
             print(f"📋 Versão do PostgreSQL: {version}")

@@ -8,6 +8,7 @@ import asyncio
 import os
 import sys
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 # Adiciona o diretório atual ao path
 sys.path.append('/app')
@@ -45,7 +46,7 @@ async def wait_for_database(max_retries=60, delay=2):
     for attempt in range(max_retries):
         try:
             async with engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
                 print(f"✅ Banco de dados disponível na tentativa {attempt + 1}")
                 return True
         except Exception as e:
@@ -61,7 +62,7 @@ async def check_table_exists():
     try:
         async with engine.begin() as conn:
             result = await conn.execute(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')"
+                text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')")
             )
             table_exists = result.scalar()
             return table_exists
@@ -90,7 +91,7 @@ async def create_tables():
             
             # Verifica se a tabela foi criada
             result = await conn.execute(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')"
+                text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')")
             )
             table_exists = result.scalar()
             
@@ -99,7 +100,7 @@ async def create_tables():
                 
                 # Lista todas as tabelas criadas
                 result = await conn.execute(
-                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+                    text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
                 )
                 tables = result.fetchall()
                 print(f"📋 Tabelas no banco: {[table[0] for table in tables]}")

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import uvicorn
+from sqlalchemy import text
 
 from database import engine, Base
 from routes.instagram import instagram_router
@@ -21,7 +22,7 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             # Verifica se as tabelas já existem
             result = await conn.execute(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')"
+                text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')")
             )
             table_exists = result.scalar()
             

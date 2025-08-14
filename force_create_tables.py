@@ -8,6 +8,7 @@ import asyncio
 import os
 import sys
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 # Configura as variáveis de ambiente para EasyPanel
 os.environ['DATABASE_URL'] = "postgresql://postgres:d30bfb311dd156dad365@servidor_fastapi-postgres:5432/servidor"
@@ -47,7 +48,7 @@ async def force_create_tables():
             
             # Verifica se a tabela foi criada
             result = await conn.execute(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')"
+                text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'instagram_accounts')")
             )
             table_exists = result.scalar()
             
@@ -56,7 +57,7 @@ async def force_create_tables():
                 
                 # Lista todas as tabelas criadas
                 result = await conn.execute(
-                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+                    text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
                 )
                 tables = result.fetchall()
                 print(f"📋 Tabelas no banco: {[table[0] for table in tables]}")
