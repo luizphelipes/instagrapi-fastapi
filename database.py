@@ -31,7 +31,21 @@ if 'psycopg2' in DATABASE_URL:
 if not DATABASE_URL.startswith('postgresql+asyncpg://'):
     DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
 
+# Remove sslmode da URL e configura via connect_args
+ssl_mode = None
+if '?sslmode=' in DATABASE_URL:
+    # Extrai o sslmode da URL
+    base_url, ssl_param = DATABASE_URL.split('?sslmode=', 1)
+    if '&' in ssl_param:
+        ssl_param, rest = ssl_param.split('&', 1)
+        DATABASE_URL = base_url + '?' + rest
+    else:
+        DATABASE_URL = base_url
+    ssl_mode = ssl_param
+
 print(f"🔗 Usando URL do banco: {DATABASE_URL}")
+if ssl_mode:
+    print(f"🔒 SSL Mode: {ssl_mode}")
 
 def generate_fernet_key():
     """Gera uma chave Fernet válida"""
@@ -84,6 +98,19 @@ def decrypt_session_id(encrypted_session_id: bytes) -> str:
 
 # Cria engine async forçando o uso do asyncpg
 try:
+    # Configura connect_args baseado no ssl_mode
+    connect_args = {
+        "server_settings": {
+            "application_name": "instagram_api"
+        }
+    }
+    
+    # Configura SSL se necessário
+    if ssl_mode == "disable":
+        connect_args["ssl"] = False
+    elif ssl_mode:
+        connect_args["ssl"] = True
+    
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,  # Set to True para debug SQL
@@ -92,11 +119,7 @@ try:
         # Força o uso do driver asyncpg
         future=True,
         # Especifica explicitamente o driver
-        connect_args={
-            "server_settings": {
-                "application_name": "instagram_api"
-            }
-        }
+        connect_args=connect_args
     )
     print("✅ Engine SQLAlchemy criado com sucesso usando asyncpg")
 except Exception as e:

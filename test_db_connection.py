@@ -20,9 +20,36 @@ async def test_database_connection():
         'postgresql+asyncpg://user:password@localhost:5432/instagram_api'
     )
     
+    # Remove sslmode da URL e configura via connect_args
+    ssl_mode = None
+    if '?sslmode=' in database_url:
+        # Extrai o sslmode da URL
+        base_url, ssl_param = database_url.split('?sslmode=', 1)
+        if '&' in ssl_param:
+            ssl_param, rest = ssl_param.split('&', 1)
+            database_url = base_url + '?' + rest
+        else:
+            database_url = base_url
+        ssl_mode = ssl_param
+    
     print(f"🔍 Testando conexão com: {database_url}")
+    if ssl_mode:
+        print(f"🔒 SSL Mode: {ssl_mode}")
     
     try:
+        # Configura connect_args baseado no ssl_mode
+        connect_args = {
+            "server_settings": {
+                "application_name": "instagram_api_test"
+            }
+        }
+        
+        # Configura SSL se necessário
+        if ssl_mode == "disable":
+            connect_args["ssl"] = False
+        elif ssl_mode:
+            connect_args["ssl"] = True
+        
         # Cria o engine
         engine = create_async_engine(
             database_url,
@@ -30,11 +57,7 @@ async def test_database_connection():
             pool_pre_ping=True,
             pool_recycle=300,
             future=True,
-            connect_args={
-                "server_settings": {
-                    "application_name": "instagram_api_test"
-                }
-            }
+            connect_args=connect_args
         )
         
         print("✅ Engine criado com sucesso")
