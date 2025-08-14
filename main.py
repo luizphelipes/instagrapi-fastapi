@@ -26,13 +26,23 @@ async def lifespan(app: FastAPI):
             table_exists = result.scalar()
             
             if not table_exists:
+                print("📋 Tabela instagram_accounts não encontrada. Criando tabelas...")
                 await conn.run_sync(Base.metadata.create_all)
                 print("✅ Tabelas criadas com sucesso")
             else:
                 print("✅ Tabelas já existem, pulando criação")
     except Exception as e:
         print(f"⚠️ Aviso: Erro ao verificar/criar tabelas: {e}")
-        print("⚠️ Continuando com a inicialização...")
+        print("🔄 Tentando criar tabelas diretamente...")
+        
+        # Tenta criar as tabelas diretamente
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                print("✅ Tabelas criadas com sucesso na segunda tentativa")
+        except Exception as e2:
+            print(f"❌ Erro ao criar tabelas na segunda tentativa: {e2}")
+            print("⚠️ Continuando com a inicialização...")
     
     # Inicializa conexão Redis
     await init_redis()

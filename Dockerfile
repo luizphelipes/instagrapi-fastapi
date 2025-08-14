@@ -35,5 +35,8 @@ USER app
 # Expõe a porta
 EXPOSE 8000
 
+# Torna o script executável
+RUN chmod +x /app/start.sh
+
 # Comando para executar a aplicação
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"] 
+CMD ["/app/start.sh"] 
