@@ -1,4 +1,5 @@
 import os
+import base64
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, DateTime, LargeBinary
@@ -14,12 +15,46 @@ DATABASE_URL = os.getenv(
     'postgresql+asyncpg://user:password@localhost:5432/instagram_api'
 )
 
+def generate_fernet_key():
+    """Gera uma chave Fernet válida"""
+    return Fernet.generate_key()
+
+def validate_fernet_key(key: str) -> bool:
+    """Valida se a chave Fernet está no formato correto"""
+    try:
+        # Verifica se a chave tem o tamanho correto (44 caracteres para base64)
+        if len(key) != 44:
+            return False
+        
+        # Tenta decodificar a chave
+        decoded_key = base64.urlsafe_b64decode(key + '=' * (4 - len(key) % 4))
+        
+        # Verifica se tem 32 bytes
+        if len(decoded_key) != 32:
+            return False
+            
+        return True
+    except Exception:
+        return False
+
 # Obter a chave de criptografia do ambiente
 ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
-if ENCRYPTION_KEY is None:
-    raise ValueError("ENCRYPTION_KEY environment variable not set. Please generate one and set it.")
 
-fernet = Fernet(ENCRYPTION_KEY)
+# Se não há chave ou se a chave não é válida, gera uma nova
+if ENCRYPTION_KEY is None or not validate_fernet_key(ENCRYPTION_KEY):
+    print("⚠️  ENCRYPTION_KEY não configurada ou inválida. Gerando nova chave...")
+    ENCRYPTION_KEY = generate_fernet_key().decode()
+    print(f"🔑 Nova chave gerada: {ENCRYPTION_KEY}")
+    print("💡 Adicione esta chave ao seu arquivo .env como ENCRYPTION_KEY=")
+
+try:
+    fernet = Fernet(ENCRYPTION_KEY.encode())
+except Exception as e:
+    print(f"❌ Erro ao inicializar Fernet: {e}")
+    print("🔑 Gerando nova chave Fernet...")
+    ENCRYPTION_KEY = generate_fernet_key().decode()
+    fernet = Fernet(ENCRYPTION_KEY.encode())
+    print(f"✅ Nova chave gerada e aplicada: {ENCRYPTION_KEY}")
 
 def encrypt_session_id(session_id: str) -> bytes:
     """Criptografa o session_id."""
