@@ -70,6 +70,14 @@ engine = create_async_engine(
     echo=False,  # Set to True para debug SQL
     pool_pre_ping=True,
     pool_recycle=300,
+    # Força o uso do driver asyncpg
+    future=True,
+    # Especifica explicitamente o driver
+    connect_args={
+        "server_settings": {
+            "application_name": "instagram_api"
+        }
+    }
 )
 
 # Cria sessão async

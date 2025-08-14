@@ -7,9 +7,9 @@
 ValueError: Fernet key must be 32 url-safe base64-encoded bytes.
 ```
 
-### 2. Erro de Dependência PostgreSQL
+### 2. Erro de Driver PostgreSQL
 ```
-ModuleNotFoundError: No module named 'psycopg2'
+sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an async driver to be used. The loaded 'psycopg2' is not async.
 ```
 
 ## ✅ Soluções Implementadas
@@ -19,9 +19,11 @@ ModuleNotFoundError: No module named 'psycopg2'
 - ✅ Validação automática do formato da chave
 - ✅ Tratamento de erro robusto
 
-### 📦 Dependências PostgreSQL (RESOLVIDO)
-- ✅ Adicionado `psycopg2-binary==2.9.9` ao `requirements.txt`
-- ✅ Dockerfile já tem `libpq-dev` instalado
+### 📦 Driver PostgreSQL (RESOLVIDO)
+- ✅ Removido `psycopg2-binary` do requirements.txt
+- ✅ Mantido apenas `asyncpg` para conexões assíncronas
+- ✅ Configuração correta do engine SQLAlchemy
+- ✅ Forçado uso do driver async com `future=True`
 
 ## 🚀 Como Aplicar as Correções
 
@@ -87,6 +89,24 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 INFO:     Application startup complete
 ```
 
+## 🧪 Teste de Conexão
+
+Para testar se a conexão com o banco está funcionando:
+
+```bash
+# Execute o script de teste
+python test_db_connection.py
+```
+
+Você deve ver:
+```
+✅ Engine criado com sucesso
+✅ Conexão bem-sucedida!
+📋 Versão do PostgreSQL: [versão]
+✅ Engine fechado com sucesso
+🎉 Teste concluído com sucesso!
+```
+
 ## ⚠️ Importante
 
 1. **Copie a chave gerada** e adicione ao seu `.env`:
@@ -98,16 +118,46 @@ INFO:     Application startup complete
 
 3. **Use a mesma chave** em todos os deploys para manter compatibilidade
 
+4. **Não use psycopg2** - estamos usando asyncpg para conexões assíncronas
+
+## 🔧 Mudanças Técnicas
+
+### Requirements.txt
+```diff
+- psycopg2-binary==2.9.9
++ asyncpg==0.29.0  # Já estava presente
+```
+
+### Database.py
+```python
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    # Força o uso do driver asyncpg
+    future=True,
+    # Especifica explicitamente o driver
+    connect_args={
+        "server_settings": {
+            "application_name": "instagram_api"
+        }
+    }
+)
+```
+
 ## 🆘 Se ainda houver problemas
 
 1. **Verifique se o Docker está rodando**
 2. **Verifique se as portas 8000, 5432, 6379 estão livres**
 3. **Verifique se o arquivo `.env` existe e está configurado**
 4. **Execute `docker system prune -a` para limpar cache**
+5. **Teste a conexão com: `python test_db_connection.py`**
 
 ## 📞 Suporte
 
 Se os problemas persistirem, verifique:
 - Logs completos: `docker-compose logs api`
 - Status dos containers: `docker-compose ps`
-- Configuração do `.env` 
+- Configuração do `.env`
+- Teste de conexão: `python test_db_connection.py` 
